@@ -51,7 +51,7 @@ mod test_readme {
         ($doc:expr, $id:ident) => {
             #[doc = $doc]
             enum $id {}
-        }
+        };
     }
 
     calculated_doc!(include_str!("../README.md"), _DoctestReadme);
@@ -60,7 +60,7 @@ mod test_readme {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::{IpAddr, Ipv4Addr, TcpListener, UdpSocket};
+    use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream, UdpSocket};
     use std::process;
 
     #[test]
@@ -79,7 +79,7 @@ mod tests {
 
         let sock = sock_info
             .into_iter()
-            .find(|s| s.associated_pids.contains(&pid))
+            .find(|s| s.associated_pids.contains(&pid) && s.local_port() == open_port)
             .unwrap();
 
         assert_eq!(
@@ -111,7 +111,7 @@ mod tests {
 
         let sock = sock_info
             .into_iter()
-            .find(|s| s.associated_pids.contains(&pid))
+            .find(|s| s.associated_pids.contains(&pid) && s.local_port() == open_port)
             .unwrap();
 
         assert_eq!(
@@ -119,9 +119,87 @@ mod tests {
             ProtocolSocketInfo::Udp(UdpSocketInfo {
                 local_addr: IpAddr::V4(Ipv4Addr::LOCALHOST),
                 local_port: open_port,
+                remote_addr: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                remote_port: 0,
+                state: UdpState::Listen,
             })
         );
         assert_eq!(sock.associated_pids, vec![pid]);
+    }
+
+    #[test]
+    fn connected_udp_socket_is_found() {
+        let listener = UdpSocket::bind("127.0.0.1:0").unwrap();
+
+        let open_port = listener.local_addr().unwrap().port();
+        let pid = process::id();
+
+        let connected = UdpSocket::bind("127.0.0.1:0").unwrap();
+        connected.connect(format!("127.0.0.1:{open_port}")).unwrap();
+
+        let af_flags = AddressFamilyFlags::all();
+        let proto_flags = ProtocolFlags::UDP;
+
+        let sock_info = get_sockets_info(af_flags, proto_flags).unwrap();
+
+        assert!(!sock_info.is_empty());
+
+        let sock = sock_info
+            .into_iter()
+            .find(|s| s.associated_pids.contains(&pid) && s.remote_port() == open_port)
+            .unwrap();
+
+        assert_eq!(
+            sock.protocol_socket_info,
+            ProtocolSocketInfo::Udp(UdpSocketInfo {
+                local_addr: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                local_port: connected.local_addr().unwrap().port(),
+                remote_addr: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                remote_port: open_port,
+                state: UdpState::Established,
+            })
+        );
+        assert_eq!(sock.associated_pids, vec![pid]);
+
+        // Close the connected socket here
+        drop(connected);
+    }
+
+    #[test]
+    fn connected_tcp_socket_is_found() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+
+        let open_port = listener.local_addr().unwrap().port();
+        let pid = process::id();
+
+        let connected = TcpStream::connect(format!("127.0.0.1:{open_port}")).unwrap();
+
+        let af_flags = AddressFamilyFlags::all();
+        let proto_flags = ProtocolFlags::TCP;
+
+        let sock_info = get_sockets_info(af_flags, proto_flags).unwrap();
+
+        assert!(!sock_info.is_empty());
+
+        let sock = sock_info
+            .into_iter()
+            .find(|s| s.associated_pids.contains(&pid) && s.remote_port() == open_port)
+            .unwrap();
+
+        assert_eq!(
+            sock.protocol_socket_info,
+            ProtocolSocketInfo::Tcp(TcpSocketInfo {
+                local_addr: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                local_port: connected.local_addr().unwrap().port(),
+                remote_addr: IpAddr::V4(Ipv4Addr::LOCALHOST),
+                remote_port: open_port,
+                state: TcpState::Established,
+            })
+        );
+        assert_eq!(sock.associated_pids, vec![pid]);
+
+        // Close the connected socket here
+        drop(connected);
     }
 
     #[test]

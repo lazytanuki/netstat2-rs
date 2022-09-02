@@ -1,4 +1,5 @@
 use crate::types::tcp_state::TcpState;
+use crate::types::udp_state::UdpState;
 use std::net::IpAddr;
 
 /// General socket information.
@@ -40,6 +41,9 @@ pub struct TcpSocketInfo {
 pub struct UdpSocketInfo {
     pub local_addr: IpAddr,
     pub local_port: u16,
+    pub remote_addr: IpAddr,
+    pub remote_port: u16,
+    pub state: UdpState,
 }
 
 impl SocketInfo {
@@ -56,6 +60,22 @@ impl SocketInfo {
         match &self.protocol_socket_info {
             ProtocolSocketInfo::Tcp(s) => s.local_port,
             ProtocolSocketInfo::Udp(s) => s.local_port,
+        }
+    }
+
+    /// Remote address of this socket.
+    pub fn remote_addr(&self) -> IpAddr {
+        match &self.protocol_socket_info {
+            ProtocolSocketInfo::Tcp(s) => s.remote_addr,
+            ProtocolSocketInfo::Udp(s) => s.remote_addr,
+        }
+    }
+
+    /// Remote port of this socket.
+    pub fn remote_port(&self) -> u16 {
+        match &self.protocol_socket_info {
+            ProtocolSocketInfo::Tcp(s) => s.remote_port,
+            ProtocolSocketInfo::Udp(s) => s.remote_port,
         }
     }
 }

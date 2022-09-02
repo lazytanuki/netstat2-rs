@@ -159,6 +159,9 @@ unsafe fn parse_diag_msg(
             protocol_socket_info: ProtocolSocketInfo::Udp(UdpSocketInfo {
                 local_addr: src_ip,
                 local_port: src_port,
+                remote_addr: dst_ip,
+                remote_port: dst_port,
+                state: get_udp_state(&dst_ip),
             }),
             associated_pids: Vec::with_capacity(0),
             inode: diag_msg.inode,
@@ -195,6 +198,13 @@ unsafe fn parse_tcp_state(diag_msg: &inet_diag_msg, rtalen: usize) -> TcpState {
         attr = RTA_NEXT!(attr, len);
     }
     TcpState::TimeWait
+}
+
+fn get_udp_state(remote_addr: &IpAddr) -> UdpState {
+    match remote_addr.is_unspecified() {
+        true => UdpState::Listen,
+        false => UdpState::Established,
+    }
 }
 
 unsafe fn try_close(sockfd: c_int) -> Result<(), Error> {
